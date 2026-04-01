@@ -104,6 +104,71 @@ mcporter call mcdonalds.list-nutrition-foods
 3. **商品详情** → `mall-product-detail`
 4. **下单兑换** → `mall-create-order`
 
+## ⚠️ 踩坑记录与解决方案
+
+### 1. `calculate-price` 和 `create-order` 参数格式（2026-04-01）
+
+**问题**：调用时一直报 `"缺少参数"` 或 `"参数缺失"`。
+
+**原因**：`items` 参数必须是 **JSON 对象数组**（不能是字符串），且需与 `storeCode`、`beCode`、`addressId` 一起作为顶层参数传入。
+
+**正确格式**（`--args` 传 JSON）：
+```bash
+# calculate-price
+mcporter call mcdonalds.calculate-price --args '{
+  "storeCode": "1450555",
+  "beCode": "145055502",
+  "addressId": "1036946320159843531343293876",
+  "items": [{"productCode": "9900013722", "quantity": 1}]
+}'
+
+# create-order（参数完全相同）
+mcporter call mcdonalds.create-order --args '{
+  "storeCode": "1450555",
+  "beCode": "145055502",
+  "addressId": "1036946320159843531343293876",
+  "items": [{"productCode": "9900013722", "quantity": 1}]
+}'
+```
+
+**踩坑的错误写法**（均会报错）：
+```bash
+# ❌ key=value 格式，items 会被当成字符串
+mcporter call mcdonalds.calculate-price addressId=xxx productList='[...]'
+
+# ❌ 用了 productList 而非 items
+--args '{"addressId":"xxx","productList":[...]}'
+
+# ❌ 用了 products 而非 items
+--args '{"addressId":"xxx","products":[...]}'
+
+# ❌ 缺少 storeCode/beCode
+--args '{"addressId":"xxx","items":[...]}'
+```
+
+### 2. `query-meal-detail` 对某些商品码返回错误（2026-04-01）
+
+**问题**：查询 `521533`（泷情蜜意麦旋风单个）时返回 `"未匹配到商品"`。
+
+**原因**：部分促销/限时商品（尤其是买一送一类套餐码如 `9900013722`）可能不在标准餐品详情库中。
+
+**规避**：优先使用 `query-meals` 获取商品名和价格，不依赖 `query-meal-detail`。买一送一商品直接用套餐码下单即可。
+
+### 3. 支付链接变为扫码支付（2026-04-01）
+
+**问题**：`create-order` 返回的 `payH5Url` 从网页收银台变成了 `https://m.mcd.cn/mcp/scanToPay?orderId=xxx` 扫码支付页。
+
+**原因**：麦当劳 MCP 端更新了支付流程，不再提供 H5 网页收银台。
+
+**应对方案**：
+- 手机上直接打开链接 → 可能自动调起微信/支付宝支付
+- 在麦当劳 App「我的订单」中找到待支付订单，直接支付
+- 暂无办法恢复网页收银台，接受现状
+
+### 4. `items` vs `productCode` 直传（2026-04-01）
+
+**发现**：`create-order` 的 schema 声明 `items?: string[]`，但实际需要传 JSON 对象数组 `[{"productCode":"xxx","quantity":1}]`。直接传 `productCode=xxx&quantity=1` 会报参数缺失。**必须用 `--args` 传完整 JSON。**
+
 ## 注意事项
 - MCP Token 代表麦当劳会员身份，严禁分享
 - 服务面向中国大陆地区（不含港澳台）

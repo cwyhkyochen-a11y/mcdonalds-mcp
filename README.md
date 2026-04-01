@@ -59,26 +59,36 @@ clawhub install mcdonalds-mcp
 ### 麦乐送点餐
 
 ```bash
-# 1. 查询配送地址（获取 storeCode + beCode）
+# 1. 查询配送地址（获取 storeCode + beCode + addressId）
 mcporter call mcdonalds.delivery-query-addresses
 
 # 2. 浏览菜单
 mcporter call mcdonalds.query-meals storeCode=<STORE> beCode=<BE>
 
-# 3. 查看菜品详情
-mcporter call mcdonalds.query-meal-detail storeCode=<STORE> beCode=<BE> itemId=<ID>
+# 3. 查看菜品详情（促销商品可能查不到，用 query-meals 替代即可）
+mcporter call mcdonalds.query-meal-detail storeCode=<STORE> beCode=<BE> code=<CODE>
 
 # 4. 查看门店优惠券
 mcporter call mcdonalds.query-store-coupons storeCode=<STORE> beCode=<BE>
 
-# 5. 计算价格
-mcporter call mcdonalds.calculate-price storeCode=<STORE> beCode=<BE> items='[{"itemId":"...","count":1}]'
+# 5. 计算价格（⚠️ 必须用 --args 传完整 JSON，items 为对象数组）
+mcporter call mcdonalds.calculate-price --args '{
+  "storeCode": "<STORE>",
+  "beCode": "<BE>",
+  "addressId": "<ADDRESS_ID>",
+  "items": [{"productCode": "<PRODUCT_CODE>", "quantity": 1}]
+}'
 
-# 6. 创建订单
-mcporter call mcdonalds.create-order ...
+# 6. 创建订单（参数与 calculate-price 完全相同）
+mcporter call mcdonalds.create-order --args '{
+  "storeCode": "<STORE>",
+  "beCode": "<BE>",
+  "addressId": "<ADDRESS_ID>",
+  "items": [{"productCode": "<PRODUCT_CODE>", "quantity": 1}]
+}'
 
 # 7. 查询订单状态
-mcporter call mcdonalds.query-order orderNo=<订单号>
+mcporter call mcdonalds.query-order --args '{"orderId":"<订单号>"}'
 ```
 
 ### 优惠券
@@ -159,6 +169,28 @@ mcporter call mcdonalds.mall-create-order skuId=<SKU_ID>
 | `campaign-calendar` | 查询当月营销活动日历 |
 | `list-nutrition-foods` | 查询餐品营养成分数据 |
 | `now-time-info` | 获取当前服务器时间 |
+
+## 常见问题
+
+### `calculate-price` / `create-order` 报"缺少参数"
+
+这两个工具**必须用 `--args` 传完整 JSON**，字段名是 `items`（不是 `productList` 或 `products`），且需包含 `storeCode`、`beCode`、`addressId` 三个顶层字段。
+
+```bash
+# ✅ 正确
+mcporter call mcdonalds.calculate-price --args '{"storeCode":"1450555","beCode":"145055502","addressId":"xxx","items":[{"productCode":"9900013722","quantity":1}]}'
+
+# ❌ 错误 — key=value 格式会被当成字符串
+mcporter call mcdonalds.calculate-price storeCode=1450555 items='[{"productCode":"xxx","quantity":1}]'
+```
+
+### `query-meal-detail` 返回"未匹配到商品"
+
+部分促销/限时商品（买一送一套餐等）不在详情库中。用 `query-meals` 获取商品名和价格即可，不依赖 `query-meal-detail`。
+
+### 支付链接变成扫码页
+
+`create-order` 返回的 `payH5Url` 目前为 `scanToPay` 扫码页。手机上打开可能自动调起支付；也可在麦当劳 App「我的订单」中直接支付。
 
 ## 注意事项
 
